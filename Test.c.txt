@@ -1,0 +1,2551 @@
+ /******************************************************************************/
+/*                                                                            */
+/* !Layer           : SRV                                                     */
+/*                                                                            */
+/* !Component       : UDS                                                     */
+/* !Description     :                                                         */
+/*                                                                            */
+/* !File            : UDS.RoutineCtrl.c                                       */
+/*                                                                            */
+/* !Scope           : Public                                                  */
+/*                                                                            */
+/* !Target          : All                                                     */
+/*                                                                            */
+/* !Vendor          : Valeo                                                   */
+/*                                                                            */
+/* Coding language  : C                                                       */
+/*                                                                            */
+/* COPYRIGHT 2011 VALEO                                                       */
+/* all rights reserved                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* PVCS Information                                                           */
+/* $Archive:                                                                 $*/
+/* $Revision::            $$Author: NNGA              $$Date::               $*/
+/******************************************************************************/
+/* !VnrOff :                                                                  */
+/******************************************************************************/
+
+#include "Std_Types.h"
+
+#include "UDS.h"
+#include "UDS_L.h"
+#include "UDS_GetSet.h"
+#include "UDS_Rdbi.h"
+
+#include "Dcm_Types.h" 
+#include <TSAutosar.h>          /* EB specific standard types */
+
+#include "NVM.h"
+
+#include "BLDC.h"
+#include "BLDC_Cfg.h"
+#include "UDS_PointeurTypes.h"
+
+#include "ENS.h"
+#include "BSW.h"
+#include "vsisrv.h"
+#include "vsisrv_prj.h"
+
+//MAIN_MSG
+#include "MAIN_L.h"
+
+/******************************************************************************/
+/* GLOBAL FUNCTION DEFINITION                                                 */
+/******************************************************************************/
+#define UDS_START_SEC_CODE
+#include "UDS_MemMap.h"
+
+// #define UDS_LEARNVIN_ROUTINE_PASSED                 0U
+// #define UDS_LEARNVIN_VIN_ALREADY_STORED             1U
+// #define UDS_LEARNVIN_DIFFERENT_VIN_ALREADY_STORED   2U
+// #define UDS_LEARNVIN_INVALID_VIN_RECEIVED           3U
+// #define UDS_LEARNVIN_TEST_TIMED_OUT                 4U
+// #define UDS_LEARNVIN_STOPPED_BEFORE_VIN_RECEIVED    4U
+// #define UDS_LEARNVIN_INTERNAL_STORAGE_PROBLEM       5U
+// #define UDS_LEARNVIN_UNSPECIFIED_FAIL_REASON        0xFE
+// #define UDS_LEARNVIN_LEARNVIN_DEFAULT_STATUS        0xFF
+
+// #define UDS_AUTOPHASING_DONE                        0
+// #define UDS_AUTOPHASING_INPROGRESS                  22
+// #define UDS_AUTOPHASING_NOT_DONE                    33 //penser à changer dans donnee_uds.txt si modification
+
+
+
+
+// #define UDS_DISCONNECT_OPENNING                     00
+// #define UDS_DISCONNECT_ENGAGED                      22
+// #define UDS_DISCONNECT_UNARMED                      33
+// #define UDS_DISCONNECT_CLOSING                      44
+
+// #define UDS_ECU_INIT_STATE_FINISHED                 00
+// #define UDS_ECU_INIT_STATE_FINISHED                 22
+// #define UDS_ECU_INIT_STATE_FINISHED                 33
+// #define UDS_ECU_INIT_STATE_FINISHED                 44
+
+
+// #define UDS_ENGAGE_DISCONNECT_ACTUATOR              00//ToDo be determine
+// #define UDS_DISENGAGE_DISCONNECT_ACTUATOR           01//ToDo be determine
+
+// #define UDS_ENGAGE_PARK_LOCK_ACTUATOR               00
+// #define UDS_DISENGAGE_PARK_LOCK_ACTUATOR            01
+
+// #define ENGAGE_PLS_REQ                              00
+// #define DISENGAGE_PLS_REQ                           01
+
+// #define ENGAGE_DISC_REQ                             00
+// #define DISENGAGE_DISC_REQ                          01
+
+// #define STATE_PLS_RES_SHIFTING_UNKNOWN              00
+// #define STATE_PLS_RES_ENGAGED                       01
+// #define STATE_PLS_RES_DISENGAGED                    02
+// #define STATE_PLS_RES_FAULT                         03
+
+// #define STATE_DISC_RES_SHIFTING_UNKNOWN             00
+// #define STATE_DISC_RES_ENGAGED                      01
+// #define STATE_DISC_RES_DISENGAGED                   02
+// #define STATE_DISC_RES_FAULT                        03
+
+
+
+
+
+// #define SHIFTERLEVEL_PARK                           01 //ToDo be determine
+// #define VEHICULESPEED_NULL                          0x00 //ToDo be determine
+// #define NRC_STATE_ENCODED_FALSE                     33 //ToDo be determine
+// #define EPB_APPLIED                                 33 //ToDo be determine
+
+ 
+
+
+// UDS_u8AutophasingStatus = UDS_AUTOPHASING_NOT_DONE;
+
+
+/******************************************************************************/
+/******* Routines Start/Stop Flags to implement the sequence error $24 ********/
+/******************************************************************************/
+// VAR(boolean, UDS_VAR) UDS_Rt202_Started = 0;
+// VAR(boolean, UDS_VAR) UDS_Rt202_Started_Ever = 0;
+
+// VAR(boolean, UDS_VAR) UDS_Rt404_Started = 0;
+// VAR(boolean, UDS_VAR) UDS_Rt404_Started_Ever = 0;
+
+// VAR(boolean, UDS_VAR) UDS_Rt40E2_Started = 0;
+// VAR(boolean, UDS_VAR) UDS_Rt40E2_Started_Ever = 0;
+
+// VAR(boolean, UDS_VAR) UDS_Rt40E4_Started = 0;
+// VAR(boolean, UDS_VAR) UDS_Rt40E4_Started_Ever = 0;
+
+// VAR(boolean, UDS_VAR) UDS_Rt40C1_Started = 0;
+// VAR(boolean, UDS_VAR) UDS_Rt40C1_Started_Ever = 0; /*NNGA : commented because is declared ont donne_uds.txt*/
+
+
+
+
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartStoreResCalibOffangleToEEPROM                   */
+/* !Description : RID 40C1                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : M Nérice NGASSA                                             */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStartStoreResCalibOffangleToEEPROM(uint16 inParam0, Dcm_OpStatusType OpStatus, 
+  P2VAR(uint16, AUTOMATIC, DCM_VAR) outParam0, 
+  P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+  TS_PARAM_UNUSED(OpStatus);
+  TS_PARAM_UNUSED(inParam0);
+  TS_PARAM_UNUSED(outParam0);
+
+  if( (UDS_u8GetPowerModeRaw() >= 6) || (UDS_bRoutineConditionByPassC == 1) )
+  {
+      if((UDS_u8GetEngineRPMRaw() == 0)  || (UDS_bRoutineConditionByPassC == 1))
+      {
+          if((UDS_u8GetVehiculeSpeed() == 0) || (UDS_bRoutineConditionByPassC == 1))
+          {
+              UDS_Rt40C1_Started = 1;
+              UDS_Rt40C1_Started_Ever = 1;
+              UDS_bSetRoutine40C1Running(TRUE);
+              // Store Resolver calibration offset angle to EEPROM
+
+              return E_OK;
+          }
+          else
+          {
+              *ErrorCode = 0x88;
+              return E_NOT_OK;           
+          }
+      }
+      else
+      {
+          *ErrorCode = 0x83;
+          return E_NOT_OK;          
+      }
+  }
+  else
+  {
+      *ErrorCode = 0xF0;
+      return E_NOT_OK;
+  }
+}
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStopStoreResCalibOffangleToEEPROM                    */
+/* !Description : RID 40C1                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : M Nérice NGASSA                                             */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStopStoreResCalibOffangleToEEPROM(Dcm_OpStatusType OpStatus, 
+  P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0, 
+  P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    TS_PARAM_UNUSED(outParam0);
+
+    if(UDS_Rt40C1_Started == 1)
+    {
+        UDS_Rt40C1_Started = 0;
+        UDS_bSetRoutine40C1Running(FALSE);
+        return E_OK;
+    } 
+    else 
+    {
+        /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+}
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcRequestResultStoreResCalibOffangleToEEPROM           */
+/* !Description : RID 40C1                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : M Nérice NGASSA                                             */
+/******************************************************************************/
+Std_ReturnType UDS_bRcRequestResultStoreResCalibOffangleToEEPROM(Dcm_OpStatusType OpStatus, 
+  P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0, 
+  P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    TS_PARAM_UNUSED(outParam0);
+    if (UDS_Rt40C1_Started_Ever == 1)
+    {
+        return E_OK;
+    } 
+  else 
+  {
+        /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+}
+
+
+
+
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartProgCond                                        */
+/* !Description : RID 0203                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : M Bras-Rabiller                                             */
+/******************************************************************************/
+FUNC(Std_ReturnType, DCM_CODE)UDS_bRcStartProgCond(
+   Dcm_OpStatusType OpStatus,
+   P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+   TS_PARAM_UNUSED(OpStatus);
+
+   if (TRUE == UDS_vidGetResetAndBootCondition())
+   {
+      return E_OK;
+   }
+   else
+   {
+      *ErrorCode = DCM_E_CONDITIONSNOTCORRECT;
+      return E_NOT_OK;
+   }
+}
+
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartInitFrBMP                                       */
+/* !Description : RID 021D                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : M Nerice N                                                  */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStartInitFrBMP(Dcm_OpStatusType OpStatus,
+  P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+  P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+   TS_PARAM_UNUSED(OpStatus);
+
+   /*------- Stub to be delete --------------*/
+    // UDS_bSetVKL15(TRUE);
+   /*------- end Stub to be delete ----------*/
+
+   if( (UDS_bGetVKL15() == TRUE) || (UDS_bRoutineConditionByPassC == 1))
+   {
+      UDS_vidSetCummulativeFRErrCnt((uint8)0);
+      //NvM_SetRamBlockStatus(NVM_BLOCK_UDS, TRUE);
+      UDS_REQUEST_SET_BLOCK_STATUS(NVM_BLOCK_UDS);
+      //NvM_WriteBlock(NVM_BLOCK_UDS, NULL_PTR);
+      UDS_REQUEST_WRITE_BLOCK(NVM_BLOCK_UDS);
+      *outParam0 = (uint8) 0xC9;
+      return E_OK;
+   }
+   else
+   {
+      *ErrorCode = 0xF0;
+      return E_NOT_OK;
+   }
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartStoreResolverCalibrationOffsetAngleToEEPROM     */
+/* !Description : RID 40E1                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : M Nerice N                                                  */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStartStoreResolverCalibrationOffsetAngleToEEPROM(
+    sint16 inParam0,
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(sint16, AUTOMATIC, DCM_VAR) outParam1,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam2,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+  TS_PARAM_UNUSED(OpStatus);
+  UDS_bSetRoutine40E1Active(TRUE);
+  NvM_RequestResultType NvM_ReturnResult_trim_2;
+  NvM_RequestResultType NvM_ReturnResult_trim_3;
+  // float32 *UDS_pf32FTEARES_CosCorGainC;
+  // float32 *UDS_pf32FTEARES_SinCorGainC;
+  // float32 *UDS_pf32FTEARES_CosCorOffsetC;
+  // float32 *UDS_pf32FTEARES_SinCorOffsetC;
+  // float32 *UDS_pf32SAMTMEP_GainCosTrimC;
+  // float32 *UDS_pf32SAMTMEP_GainSinTrimC;
+  // float32 *UDS_pf32SAMTMEP_OffsetCosTrimC;          
+  // float32 *UDS_pf32SAMTMEP_OffsetSinTrimC;
+  // float32 *UDS_pf32FTEOMEP_LutOutAutophasingAngleC;
+  // float32 *UDS_pf32SAMTMEP_AutoPhasingAngleC; 
+
+   if( ((UDS_bGetVKL15() == TRUE) && (UDS_bGetVCranking() == FALSE)) || (UDS_bRoutineConditionByPassC == 1))
+   {
+        *UDS_pf32FTEOMEP_LutOutAutophasingAngleC = (sint16) inParam0;
+        *(UDS_pf32FTEOMEP_LutOutAutophasingAngleC+1) = (sint16) inParam0;
+        *UDS_pf32SAMTMEP_AutoPhasingAngleC =  (sint16)inParam0;
+        *outParam1 = inParam0;
+        UDS_REQUEST_WRITE_BLOCK(NVM_trim_2);
+        UDS_REQUEST_WRITE_BLOCK(NVM_trim_3);
+        NvM_GetErrorStatus(NVM_trim_2, &NvM_ReturnResult_trim_2);
+        NvM_GetErrorStatus(NVM_trim_2, &NvM_ReturnResult_trim_3);
+        if((NvM_ReturnResult_trim_2 == NVM_REQ_OK) && (NvM_ReturnResult_trim_3 == NVM_REQ_OK))
+        {
+            *outParam2 =  0x00;
+        }
+        else
+        {
+            *outParam2 =  0x01;
+        }
+        *outParam0 = (uint8) 0x4A;
+        return E_OK;
+   }
+   else
+   {
+      *ErrorCode = 0xF0;
+      return E_NOT_OK;
+   }
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartTempChangeOfMaxAfterRunNH                       */
+/* !Description : RID 0208                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : M Nerice N                                                  */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStartTempChangeOfMaxAfterRunNH(uint8 inParam0,
+ Dcm_OpStatusType OpStatus,
+ P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+ P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+
+  /*------- Stub to be delete --------------*/
+  // UDS_bSetVKL15(TRUE);
+  /*------- end Stub to be delete ----------*/
+    
+    if((UDS_bGetVKL15() == TRUE ) || (UDS_bRoutineConditionByPassC == 1) )
+    {
+    UDS_bSetActive0208Cnt(TRUE);
+        UDS_vidSetMaxTimeNetworkKeepAwakeRaw(inParam0);
+        *outParam0 = (uint8)0xC9;
+        // *outParam1 = 0xC9;
+
+        return E_OK;
+    }
+    else
+    {
+        *ErrorCode = 0xF0;
+        return E_NOT_OK;
+    }
+}
+
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartOnDemandSelfTest                                */
+/* !Description : RID 0202                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+
+Std_ReturnType UDS_bRcStartOnDemandSelfTest(
+   Dcm_OpStatusType OpStatus,
+   P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+   P2VAR(uint16, AUTOMATIC, DCM_VAR) currentDataLength,
+   P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+   // to be implemented, check connection of all equipments 
+    TS_PARAM_UNUSED(OpStatus);
+    UDS_bSetRoutineActive(TRUE);
+    UDS_u32_CIHS_SigFrInc_ODSTDTCReport = 0x00000000;
+    UDS_u32_CIHS_CircShToB_ODSTDTCReport = 0x00000000;
+    UDS_u32_CIHS_CirShToGr_ODSTDTCReport = 0x00000000;
+    UDS_u32_VCBE_BusOff_ODSTDTCReport = 0x00000000;
+    UDS_u32_HVSIC_CircuitOpen_ODSTDTCReport = 0x00000000;
+    UDS_u32_VCBF_BusOFF_ODSTDTCReport = 0x00000000;
+
+
+    if(( UDS_u8GetVehiculeSpeed() < 3 ) || (UDS_bRoutineConditionByPassC == 1) )
+    {
+        if( (UDS_u8GetMSGu8isVehicleSpeedQF() == 3) || (UDS_bRoutineConditionByPassC == 1))
+        {
+            if( (UDS_u8GetE_MachineOperatingMode() != UDS_EMOPERATINGMODEEXT_INITIALISATION ) || (UDS_bRoutineConditionByPassC == 1))
+            {
+                if( (VoltaGegreaterThan(UDS_u8GetECUPowerSupplyVoltageRaw(),9) ) || (UDS_bRoutineConditionByPassC == 1))
+                {
+                    if( ((UDS_bGetVKL15() == TRUE) && UDS_bGetVCranking() == FALSE)  || (UDS_bRoutineConditionByPassC == 1))
+                    {
+                        UDS_Rt202_Started = 1;
+                        UDS_Rt202_Started_Ever = 1;
+                        UDS_bRt202_DropSession = FALSE;
+                        UDS_u8RoutineInfo0202 = ( UDS_u8RoutineInfo0202 |  0b000000001);
+                        UDS_u8RoutineInfo0202 = (UDS_u8RoutineInfo0202 & 0b11111101);
+                        UDS_bSetODSTRunning(TRUE);
+                        UDS_bSetRoutine0202Running(TRUE) ;
+                        UDS_u16Set0202TimeCnt500(0) ;
+
+                        if(ENS_bFaultDetInvalidPWM  == TRUE) 
+                        {
+                           UDS_u32_CIHS_SigFrInc_ODSTDTCReport = 0x00920738;
+                        }
+                        else
+                        {
+                          UDS_u32_CIHS_SigFrInc_ODSTDTCReport = 0x00000000;
+                        } 
+
+                        if(ENS_bFaultDetShortVbat  == TRUE)
+                        {
+                           UDS_u32_CIHS_CircShToB_ODSTDTCReport = 0x00920712;
+                        }
+                        else
+                        {
+                          UDS_u32_CIHS_CircShToB_ODSTDTCReport = 0x00000000;
+                        }                           
+                        if(ENS_bFaultDetShortGnd == TRUE)
+                        {
+                           UDS_u32_CIHS_CirShToGr_ODSTDTCReport = 0x00920714;
+                        }
+                        else
+                        {
+                          UDS_u32_CIHS_CirShToGr_ODSTDTCReport = 0x00000000;
+                        }                          
+                      
+                        if(VSISRV_GetSignalFaultCHVILClose()   == TRUE) 
+                        {
+                           UDS_u32_HVSIC_CircuitOpen_ODSTDTCReport = 0x0A0A13;
+                        }
+                        else
+                        {
+                          UDS_u32_HVSIC_CircuitOpen_ODSTDTCReport = 0x00000000;
+                        }
+
+                        if(MSG_bFrClstrClockSyncLossError == TRUE)
+                        {
+                          UDS_u32_VCBF_BusOFF_ODSTDTCReport = 0x00C08088 ;
+                        }
+                        else
+                        {
+                          UDS_u32_VCBF_BusOFF_ODSTDTCReport = 0x00000000 ; 
+                        }
+
+                        if(BSW_bCANBusOff == TRUE)
+                        {
+                          UDS_u32_VCBE_BusOff_ODSTDTCReport = 0x00C06488;
+                        }
+                        else
+                        {
+                          UDS_u32_VCBE_BusOff_ODSTDTCReport = 0x00000000;
+                        }
+
+                        *outParam0 = UDS_u8RoutineInfo0202;
+                        return E_OK;
+                    }
+                    else
+                    {
+                        *ErrorCode = 0xF0;
+                        return E_NOT_OK;
+                    }  
+                }
+                else
+                {
+                    *ErrorCode = 0x93;
+                    return E_NOT_OK;
+                }
+            }
+            else
+            {
+                *ErrorCode = 0x21;
+                return E_NOT_OK;
+            }
+        }
+        else
+        {
+            *ErrorCode = 0x26;
+            return E_NOT_OK;
+        }
+    }
+    else
+    {
+        *ErrorCode = 0x88;
+        return E_NOT_OK;
+    }
+}
+
+
+/******************************************************************************/
+/*!FuncName    : UDS_bRcStopOnDemandSelfTest                                  */
+/*!Description : RID 0202                                                     */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStopOnDemandSelfTest(
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(uint16, AUTOMATIC, DCM_VAR) currentDataLength,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    if (UDS_Rt202_Started == 1)
+    { 
+        UDS_bSetRoutine0202Running(FALSE) ;    
+        UDS_bSetRoutineActive(FALSE);
+        UDS_u8RoutineInfo0202 = (UDS_u8RoutineInfo0202 & 0b111111110);
+        *outParam0 = UDS_u8RoutineInfo0202;
+        UDS_Rt202_Started = 0;
+        return E_OK;
+    } 
+    else 
+    {
+        /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+}
+
+/******************************************************************************/
+/*!FuncName    : UDS_bRcRequestResultOnDemandSelfTest                         */
+/*!Description : RID 0202                                                     */
+/******************************************************************************/
+Std_ReturnType UDS_bRcRequestResultOnDemandSelfTest(
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8 , AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(uint16, AUTOMATIC, DCM_VAR) currentDataLength,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    if (UDS_Rt202_Started_Ever == 1 && UDS_bRt202_DropSession == FALSE)
+    {
+      uint8* RoutineInfoOutPutByte=outParam0; 
+      uint32 u32LocalOutput = 0;
+      outParam0++;
+      (*currentDataLength)=(*currentDataLength)+1;
+      if(UDS_u32_CIHS_SigFrInc_ODSTDTCReport != 0x00000000)
+      {
+        UDS_u8RoutineInfo0202 = ( UDS_u8RoutineInfo0202 |  0b000000010);
+        *outParam0=((uint8)((UDS_u32_CIHS_SigFrInc_ODSTDTCReport & 0x00FF0000)>> 16));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_CIHS_SigFrInc_ODSTDTCReport & 0x0000FF00)>> 8));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_CIHS_SigFrInc_ODSTDTCReport & 0x000000FF)));
+        outParam0++;
+        (*currentDataLength)=(*currentDataLength)+3;
+      }
+      else
+      {
+          
+      }
+      
+
+      if(UDS_u32_CIHS_CircShToB_ODSTDTCReport != 0x00000000)
+      {
+        UDS_u8RoutineInfo0202 = ( UDS_u8RoutineInfo0202 |  0b000000010);
+        *outParam0=((uint8)((UDS_u32_CIHS_CircShToB_ODSTDTCReport & 0x00FF0000)>> 16));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_CIHS_CircShToB_ODSTDTCReport & 0x0000FF00)>> 8));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_CIHS_CircShToB_ODSTDTCReport & 0x000000FF)));
+        outParam0++;
+        (*currentDataLength)=(*currentDataLength)+3;
+      }
+      else
+      {
+
+      }      
+
+      if(UDS_u32_CIHS_CirShToGr_ODSTDTCReport != 0x00000000)
+      {
+
+        UDS_u8RoutineInfo0202 = ( UDS_u8RoutineInfo0202 |  0b000000010);
+        *outParam0=((uint8)((UDS_u32_CIHS_CirShToGr_ODSTDTCReport & 0x00FF0000)>> 16));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_CIHS_CirShToGr_ODSTDTCReport & 0x0000FF00)>> 8));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_CIHS_CirShToGr_ODSTDTCReport & 0x000000FF)));
+        outParam0++; 
+        (*currentDataLength)=(*currentDataLength)+3;
+      }
+      else
+      {
+
+      }
+
+      if(UDS_u32_VCBE_BusOff_ODSTDTCReport != 0x00000000)
+      {
+        UDS_u8RoutineInfo0202 = ( UDS_u8RoutineInfo0202 |  0b000000010);
+        *outParam0=((uint8)((UDS_u32_VCBE_BusOff_ODSTDTCReport & 0x00FF0000)>> 16));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_VCBE_BusOff_ODSTDTCReport & 0x0000FF00)>> 8));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_VCBE_BusOff_ODSTDTCReport & 0x000000FF)));
+        outParam0++; 
+        (*currentDataLength)=(*currentDataLength)+3;
+      }
+      else
+      {
+
+      }
+
+      if(UDS_u32_HVSIC_CircuitOpen_ODSTDTCReport != 0x00000000)
+      {
+        UDS_u8RoutineInfo0202 = ( UDS_u8RoutineInfo0202 |  0b000000010);
+        *outParam0=((uint8)((UDS_u32_HVSIC_CircuitOpen_ODSTDTCReport & 0x00FF0000)>> 16));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_HVSIC_CircuitOpen_ODSTDTCReport & 0x0000FF00)>> 8));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_HVSIC_CircuitOpen_ODSTDTCReport & 0x000000FF)));
+        outParam0++; 
+        (*currentDataLength)=(*currentDataLength)+3;
+      }
+      else
+      {
+
+      }
+
+      if(UDS_u32_VCBF_BusOFF_ODSTDTCReport != 0x00000000)
+      {
+        UDS_u8RoutineInfo0202 = ( UDS_u8RoutineInfo0202 |  0b000000010);
+        *outParam0=((uint8)((UDS_u32_VCBF_BusOFF_ODSTDTCReport & 0x00FF0000)>> 16));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_VCBF_BusOFF_ODSTDTCReport & 0x0000FF00)>> 8));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_VCBF_BusOFF_ODSTDTCReport & 0x000000FF)));
+        outParam0++; 
+        (*currentDataLength)=(*currentDataLength)+3;
+      }
+      else
+      {
+
+      }      
+      *RoutineInfoOutPutByte=UDS_u8RoutineInfo0202;
+        return E_OK;
+    }
+    else 
+    {
+        /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+}
+
+
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartLearnVin                                        */
+/* !Description : RID 0404                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : NNGA                                                        */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStartLearnVin(Dcm_OpStatusType OpStatus, 
+  P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0, 
+  P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+  //listen to the Flexray/CAN and retrieve the VIN (which is written on the bus CAN/Flexray every 10 secondes according to the spec "VIN Diagnostic Interface Specification_v001")
+    TS_PARAM_UNUSED(OpStatus);
+    if((UDS_bGetVKL15() == TRUE) || (UDS_bRoutineConditionByPassC == 1))  
+    {
+        UDS_u16Set0404TimeCnt500(0);
+        UDS_bSetActive0404Cnt(TRUE);
+        UDS_u8SetLearnVINFailureRaison(UDS_LEARNVIN_LEARNVIN_DEFAULT_STATUS);
+        UDS_Rt404_Started = TRUE;
+        UDS_Rt404_Started_Ever = TRUE;
+        *outParam0 = 0x79;
+        return E_OK;        
+    }
+    else
+    {
+        *ErrorCode = 0xF0;
+        return E_NOT_OK;
+    }
+}
+
+
+/******************************************************************************/
+/*!FuncName    : UDS_bRcStopLearnVin                                          */
+/*!Description : 0404                                                         */
+/*!Number      : 0                                                            */
+/*!Reference   : NONE                                                         */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStopLearnVin(Dcm_OpStatusType OpStatus, 
+ P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0, 
+ P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    if (UDS_Rt404_Started == TRUE)
+    {
+        UDS_bSetRoutineActive(FALSE);
+        UDS_bSetActive0404Cnt(FALSE);
+        UDS_Rt404_Started = FALSE;
+        UDS_u8Set0404RoutineInformation(0x7A);
+        *outParam0 = UDS_u8Get0404RoutineInformation();
+        return E_OK;
+    } 
+    else
+    {
+        /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+   
+}
+
+
+/******************************************************************************/
+/*!FuncName    : UDS_bRcRequestResultLearnVin                                 */
+/*!Description : 0404                                                         */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+Std_ReturnType UDS_bRcRequestResultLearnVin(Dcm_OpStatusType OpStatus,
+ P2VAR(uint16, AUTOMATIC, DCM_VAR) outParam0,
+ P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    uint16 u16LocalOutput;
+    if (UDS_Rt404_Started_Ever == TRUE)
+    {
+        u16LocalOutput = (uint16) ( ((uint16)UDS_u8Get0404RoutineInformation())  << 8 );
+        u16LocalOutput = (u16LocalOutput | UDS_u8GetLearnVINFailureRaison() );
+        *outParam0 = (uint16)u16LocalOutput;
+        return E_OK;
+    } 
+    else 
+    {
+    /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+}
+
+
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartClearVin                                        */
+/* !Description : RID DC00                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStartClearVin(Dcm_OpStatusType OpStatus,
+ P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+ P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+  TS_PARAM_UNUSED(OpStatus);
+  if((UDS_bGetVKL15() == TRUE) || (UDS_bRoutineConditionByPassC == 1))  
+  {
+      uint8 u8LocalId;
+      UDS_bClearVin = TRUE;
+
+      for (u8LocalId = 0; u8LocalId < 17; u8LocalId++)
+      {
+        UDS_u8EcuVinNvm[u8LocalId] = 0x00 ;    
+      }
+      //NvM_SetRamBlockStatus(NVM_BLOCK_UDS, TRUE); // activation of the NVM writen.
+      // *outParam0 = 01; //old value
+      *outParam0 = 0xC9; //Just to part1 testing
+      //NvM_WriteBlock(NvM_BLOCK_ECUVIN, NULL_PTR);
+      UDS_REQUEST_WRITE_BLOCK(NvM_BLOCK_ECUVIN);
+
+      return E_OK;   
+  }
+  else
+  {
+    *ErrorCode = 0xF0;
+    return E_NOT_OK;
+  }
+}
+
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartResolverAutoPhasing                             */
+/* !Description : RID 40E3 | FF1F                                             */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+
+// Std_ReturnType UDS_bRcStartResolverAutoPhasing(Dcm_OpStatusType OpStatus, 
+//  P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+// UDS_bRcStartAutoCalibrationOfResolverOffsetAngle
+Std_ReturnType UDS_bRcStartAutoCalibrationOfResolverOffsetAngle(
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+
+// Std_ReturnType UDS_bRcStartAutoCalibrationOfResolverOffsetAngle(
+//   uint32 inParam0, 
+//   uint32 inParam1, 
+//   uint32 inParam2, 
+//   uint32 inParam3, 
+//   Dcm_OpStatusType OpStatus, 
+//   P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+//   P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    Std_ReturnType result = DCM_E_NOT_OK;
+    uint8 u16LocalthresholdVehiculeSpeed = 3;
+    UDS_bSetRoutine40E3Running(TRUE);
+
+/*
+    if(UDS_u8TestErrorCode == 5)
+    {
+        UDS_u8AutophasingStatus = UDS_AUTOPHASING_INPROGRESS ;
+        result = DCM_E_OK;
+    }
+    else
+    {
+        *ErrorCode = 6;
+        result = E_NOT_OK; 
+    }
+*/
+if ( (UDS_Rt40E4_Started != 1) || (UDS_bRoutineConditionByPassC == 1))
+    {
+        if ( (UDS_Rt40E2_Started != 1) || (UDS_bRoutineConditionByPassC == 1))
+        {
+            if( (UDS_u8GetVehiculeSpeed() < u16LocalthresholdVehiculeSpeed ) || (UDS_bRoutineConditionByPassC == 1))
+            {
+                if( (VoltaGegreaterThan(UDS_u8GetECUPowerSupplyVoltageRaw(),11) ) || (UDS_bRoutineConditionByPassC == 1))
+                {
+                    if(((UDS_u8GetMSGu8isVehicleSpeedQF() == 3) || (UDS_bRoutineConditionByPassC == 1)))
+                    {
+                        if( ((UDS_bGetVKL15() == TRUE) && (UDS_bGetVCranking() == FALSE) )  || (UDS_bRoutineConditionByPassC == 1))
+                        {
+                            if((UDS_u16GetMAIN_FaultFailureLevel() != 3) || (UDS_bRoutineConditionByPassC == 1) )
+                            {
+                                UDS_Rt40E3_Started = 1;
+                                UDS_Rt40E3_Started_Ever = 1;
+                                UDS_bSetDdcModeReq(TRUE);
+                                UDS_bSetAutophasingReq(TRUE);
+                                *outParam0 = 0x7B;
+                                UDS_bSetRoutineActive(TRUE);
+                                UDS_bSetRoutine40E3Active(TRUE);
+                                return E_OK;
+                            }
+                            else
+                            {
+                                *ErrorCode = 0x26;
+                                UDS_u840E3AbnormalExitCondition = 0x26;
+                                return E_NOT_OK;
+                            }
+                        }
+                        else
+                        {
+                            *ErrorCode = 0xF0;
+                            UDS_u840E3AbnormalExitCondition = 0xF0;
+                            return E_NOT_OK;
+                        }
+                    }  
+                    else
+                    {
+                        *ErrorCode = UDS_VEHICULESPEED_NOT_QF_NRC ;
+                        UDS_u840E3AbnormalExitCondition = UDS_VEHICULESPEED_NOT_QF_NRC;
+                        return E_NOT_OK;
+                    }
+                }
+                else
+                {
+                    *ErrorCode = UDS_UBAT_LV_OUTOFRANGE_NRC ;
+                    UDS_u840E3AbnormalExitCondition = UDS_UBAT_LV_OUTOFRANGE_NRC ;
+                    return E_NOT_OK;
+                }
+            }
+            else
+            {
+                *ErrorCode = UDS_VEHICULESPEED_TO_HIGHT_NRC;
+                UDS_u840E3AbnormalExitCondition = UDS_VEHICULESPEED_TO_HIGHT_NRC;
+                UDS_u8SetAutoPhasingResult(2);//Vehicle speed to high
+                return E_NOT_OK;
+            }
+        }
+        else
+        {
+            *ErrorCode = 0xF8;
+            UDS_u840E3AbnormalExitCondition = 0xF8;
+            return E_NOT_OK;
+        }
+    }
+else
+{
+    *ErrorCode = 0xF9;
+    UDS_u840E3AbnormalExitCondition = 0xF8;
+    return E_NOT_OK;
+}
+    
+
+    return result;
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStopAutoCalibrationOfResolverOffsetAngle             */
+/* !Description : RID RID 40E3 | FF1F                                         */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStopAutoCalibrationOfResolverOffsetAngle(
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    if (UDS_Rt40E3_Started == 1)
+    {
+        TS_PARAM_UNUSED(OpStatus);
+        TS_PARAM_UNUSED(ErrorCode);
+        UDS_u840E3AbnormalExitCondition = (UDS_u840E3AbnormalExitCondition & 0b11111110);
+
+        UDS_bSetRoutine40E3Running(FALSE);
+        UDS_bSetDiagReq(FALSE);
+        UDS_bSetDdcModeReq(FALSE);
+        UDS_bSetAutophasingReq(FALSE);
+        UDS_bSetRoutineActive(FALSE);
+        UDS_bSetRoutine40E3Active(FALSE);
+        
+        *outParam0 = 0x7A;
+        UDS_Rt40E3_Started = 0;
+        return E_OK;
+    }
+    else
+    {
+        /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcResultResolverAutoPhasing                            */
+/* !Description : RID RID 40E3 | FF1F                                         */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+Std_ReturnType UDS_u8RcRequestResultAutoCalibrationOfResolverOffsetAngle(
+    Dcm_OpStatusType OpStatus,
+    P2VAR(sint32, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam1,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    // *outParam0 = UDS_s16GetResolverOffsetValue();
+    // *outParam0 = (sint16)UDS_f32GetFSTCAAP_AutoPhasingAngle();
+    // f32LocalAutophasingAngle = 0.8819;
+    TS_PARAM_UNUSED(OpStatus);
+    TS_PARAM_UNUSED(ErrorCode);
+    
+    if (UDS_Rt40E3_Started_Ever == 1)
+    {
+        float32 f32LocalAutophasingAngle = *UDS_pf32SAMTMEP_AutoPhasingAngleC;
+        sint16 s16LocalLocalAutophasingAngle;
+
+        f32LocalAutophasingAngle = f32LocalAutophasingAngle*32000;
+
+        if(f32LocalAutophasingAngle <=( -32768)) //1.024*32000
+        {
+        f32LocalAutophasingAngle = (-32768);
+        }    
+
+        if(f32LocalAutophasingAngle >= (32767)) //1.02396875*32000
+        {
+        f32LocalAutophasingAngle = 32767;
+        }
+ 
+        s16LocalLocalAutophasingAngle = (sint16) f32LocalAutophasingAngle;
+
+        *outParam0 = *outParam0|(s16LocalLocalAutophasingAngle<<8);
+
+
+        if(UDS_bGetRoutine40E3Active() == TRUE)
+        {
+            *outParam0 = *outParam0|(0x7B000000);
+        }
+
+        else
+        {
+            *outParam0 = *outParam0|(0x7A000000);
+        }
+        
+        // *outParam0 = *UDS_pf32SAMTMEP_AutoPhasingAngleC;
+        
+        *outParam1 =  UDS_u8GetAutoPhasingResult();
+        return E_OK;
+    }
+    else
+    {
+        /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+
+
+
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bCurrentAllWheelSpeedUnderThreshold                            */
+/* !Description : RID 40E2                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+boolean UDS_bCurrentAllWheelSpeedUnderThreshold(uint16 u16LocalthresholdAllWheelSpeed)
+{
+
+   boolean result = FALSE;
+
+   if(UDS_u8GetLeftFrontWheelSpeedSensorInput() < u16LocalthresholdAllWheelSpeed)
+   {
+      result = TRUE;
+   }   
+   if(UDS_u8GetRightFrontWheelSpeedSensorInput() < u16LocalthresholdAllWheelSpeed)
+   {
+      result = TRUE;
+   }   
+   if(UDS_u8GetLeftRearWheelSpeedSensorInput() < u16LocalthresholdAllWheelSpeed)
+   {
+      result = TRUE;
+   }   
+   if(UDS_u8GetRightRearWheelSpeedSensorInput() < u16LocalthresholdAllWheelSpeed)
+   {
+      result = TRUE;
+   }
+
+   return result;
+}
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bGetParklockFailurePresent                              */
+/* !Description : RID 40E2                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+boolean UDS_bGetParklockFailurePresent()
+{
+   boolean bLocal = FALSE; //ParklockFailurePresent UDS_bParklockFailurePresent
+   // checker toutes les fautes du parlock et rassurer qu'aucune de ces fautes n'est loggées
+   //ci -dessous la liste des DTC, à voir dans le fichier Diagnostics_SW_Content_3.16
+/* 18A6
+   2887
+   07E6
+   07E4
+   271B
+   288B
+   271A
+   288B
+   272C
+   C402
+   271D
+   271A
+*/
+   
+   return bLocal;
+}
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartControlParkLockActuator                         */
+/* !Description : RID 40E2                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStartControlParkLockActuator(
+    uint8 inParam0,
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    UDS_bSetRoutine40E2Running(TRUE);
+    // UDS_u8SetIpmMgrOperStReq(UDS_IPMMGROPERSTREQ_DDC);
+    uint8 u8LocalStateRequested = (uint8) inParam0;
+
+    UDS_u16SetPLSTimeCnt2000(0);
+    UDS_bSetActivePLSCnt(TRUE);//to achive this Only one BLDC motor for ParkLock /Disconnect system can be active at one point in time
+   // UDS_u840E2AbnormalExitReason = 0b01111001; /*removeda*/
+
+    UDS_u16SetTimeStampPLSRoutine((uint32)0);
+
+    uint8 u16LocalthresholdVehiculeSpeed = (uint8) 3;  //Kph  
+
+
+    uint8 u8LocalCurrentAllWheelSpeed = UDS_u8GetCurrentAllWheelSpeed();  
+
+    UDS_Rt40E2_Started = 1;
+    UDS_Rt40E2_Started_Ever = 1;
+
+
+    if((inParam0 != 0x01)&& (inParam0 != 0x00))
+    {
+        *ErrorCode = DCM_E_REQUESTOUTOFRANGE;
+        return E_NOT_OK;
+    }
+    
+    else
+    {
+        if((((UDS_Rt40E4_Started_Ever == 0) ^ (UDS_Rt40E2_Started_Ever == 0)) || (UDS_bGetRoutine40E4RunOver1sec() == TRUE)) || (UDS_bRoutineConditionByPassC == 1))
+        {
+            if(((VoltaGegreaterThan(UDS_u8GetECUPowerSupplyVoltageRaw(),11)) && (VoltageLessThan(UDS_u8GetECUPowerSupplyVoltageRaw(),16)))  || (UDS_bRoutineConditionByPassC == 1))
+            {
+                if((UDS_u8GetVehiculeSpeed() < u16LocalthresholdVehiculeSpeed) || (UDS_bRoutineConditionByPassC == 1))
+                {
+                    if( (UDS_u8GetIPMOperationalState() != UDS_IPMMGROPERSTST_FAILURE ) || (UDS_bRoutineConditionByPassC == 1))
+                    {
+                        if(((UDS_u8GetMSGu8isVehicleSpeedQF() == 3) || (UDS_bRoutineConditionByPassC == 1)))
+                        {
+                            if( ( (UDS_u8GetIPMOperationalState() != UDS_IPMMGRDDCSTS_IN_EXECUTION) || (UDS_bRoutineConditionByPassC == 1) ) )
+                            {
+                                if( ((UDS_u8GetControlStatusofElectricalMachine() != UDS_EMOPERATINGMODEEXT_TORQUE_MODE) || (UDS_bRoutineConditionByPassC == 1 ) ) )
+                                {
+                                    if( ((UDS_u8GetElectricParkBrakeStatus() == UDS_EPBMODE_APPLIED_DYNAMICALLY) || (UDS_bRoutineConditionByPassC == 1 ) ))
+                                    {
+                                        if ((UDS_bGetRoutine40E3Running() == 0 ) || (UDS_bRoutineConditionByPassC == 1 ))
+                                        {
+                                            if( (UDS_u8GetParkLockOperationState() ==  UDS_PLSOPERSTSTS_DDC)  || (UDS_u8GetParkLockOperationState() ==  UDS_PLSOPERSTSTS_RUN) || (UDS_bRoutineConditionByPassC == 1 ))
+                                            {
+                                                UDS_u16Set40E2TimeCnt500(0);
+                                                UDS_Rt40E2_1Sec_Timer_EN=1;
+                                                UDS_bSetRoutine40E2RunOver1sec(FALSE);
+                                                UDS_u8RoutineInfo40E2 = (UDS_u8RoutineInfo40E2 | 0b00000011);
+                                                if(u8LocalStateRequested == UDS_ENGAGE_PLS_REQ ) //engage the Parklock
+                                                {
+                                                UDS_u8SetReqPLS(UDS_ENGAGE_PLS_REQ);
+                                                UDS_bSetDdcModeReq(TRUE);
+                                                UDS_bSetDiagReq(TRUE);
+                                                // UDS_u8SetStatePLSRes(UDS_STATE_PLS_RES_SHIFTING_UNKNOWN); //should we ?
+                                                *outParam0 =  UDS_u8RoutineInfo40E2;
+                                                return E_OK;
+                                                }
+                                                if(u8LocalStateRequested == UDS_DISENGAGE_PLS_REQ )
+                                                { //disengage the Parklock
+                                                UDS_u8SetReqPLS(UDS_DISENGAGE_PLS_REQ);
+                                                UDS_bSetDdcModeReq(TRUE);
+                                                UDS_bSetDiagReq(TRUE);
+                                                // UDS_u8SetStatePLSRes(UDS_STATE_PLS_RES_SHIFTING_UNKNOWN); 
+                                                *outParam0 =  UDS_u8RoutineInfo40E2;
+                                                return  E_OK;
+                                                }   
+                                            }
+                                            else
+                                            {
+                                            *ErrorCode = UDS_PLS_OPERSTSTS_NOT_DDC_RUN_MODE_NRC;
+                                            UDS_u840E2ExitCondition = UDS_PLS_OPERSTSTS_NOT_DDC_RUN_MODE_NRC;
+                                            UDS_bSetActivePLSCnt(FALSE);
+                                            return E_NOT_OK;                                        
+                                            }
+                                        }
+                                        else
+                                        {
+                                            *ErrorCode =UDS_Routine40E3Running_NRC ;
+                                            UDS_u840E2ExitCondition =UDS_Routine40E3Running_NRC ;
+                                            UDS_bSetActivePLSCnt(FALSE);
+                                            return E_NOT_OK;                            
+                                        }
+                                    }
+                                    else
+                                    {
+                                        *ErrorCode = UDS_EPB_NOT_APPLIED_NRC;
+                                        UDS_u840E2ExitCondition = UDS_EPB_NOT_APPLIED_NRC;
+                                        UDS_bSetActivePLSCnt(FALSE);
+                                        return E_NOT_OK;                                            
+                                    }
+                                }
+                                else
+                                {
+                                    *ErrorCode = UDS_EMACHINE_NOT_IN_TORQUE_MODE_NRC;
+                                    UDS_u840E2ExitCondition = UDS_EMACHINE_NOT_IN_TORQUE_MODE_NRC;
+                                    UDS_bSetActivePLSCnt(FALSE);
+                                    return E_NOT_OK;    
+                                }
+                            }
+                            else
+                            {
+                                *ErrorCode = UDS_NO_PREVIOUS_REQ_IN_EXEC_NRC;
+                                UDS_u840E2ExitCondition = UDS_NO_PREVIOUS_REQ_IN_EXEC_NRC;
+                                UDS_bSetActivePLSCnt(FALSE);
+                                return E_NOT_OK;   
+                            }
+                        }
+                        else
+                        {
+                            UDS_u840E2ExitCondition = 0x062;//mnin gab el value dih  saggan
+                           *ErrorCode = UDS_VEHICULESPEED_NOT_QF_NRC;
+                            UDS_bSetActivePLSCnt(FALSE); 
+                            return E_NOT_OK;  
+                        }
+                    } 
+                    else
+                    {
+                        UDS_u840E2ExitCondition = 0x161;
+                        *ErrorCode = UDS_OPERSTSTS_FAILURE_MODE_NRC;
+                        UDS_bSetActivePLSCnt(FALSE);
+                        return E_NOT_OK;            
+                    }
+                }
+                else
+                {
+                    *ErrorCode = UDS_VEHICULESPEED_TO_HIGHT_NRC;
+                    UDS_u840E2ExitCondition = UDS_VEHICULESPEED_TO_HIGHT_NRC;
+                    UDS_bSetActivePLSCnt(FALSE);
+                    return E_NOT_OK; 
+                }
+            }
+            else
+            {
+                *ErrorCode = UDS_UBAT_LV_OUTOFRANGE_NRC;
+                UDS_u840E2ExitCondition = UDS_UBAT_LV_OUTOFRANGE_NRC;
+                UDS_bSetActivePLSCnt(FALSE);
+                return E_NOT_OK; 
+            }
+        }
+        else
+        {
+            *ErrorCode = UDS_Routine_40E4_run_lessthan1sec_NRC;
+            UDS_u840E2ExitCondition = UDS_Routine_40E4_run_lessthan1sec_NRC;
+            UDS_bSetActivePLSCnt(FALSE);
+            return E_NOT_OK;
+        }
+        
+    }
+}
+
+
+// Std_ReturnType UDS_bRcStartControlParkLockActuator_AA350(uint8 inParam0, Dcm_OpStatusType OpStatus,
+//   P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+//   P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+// {
+//   TS_PARAM_UNUSED(OpStatus);
+//   Std_ReturnType  result = E_NOT_OK;
+
+//   UDS_u16SetPLSTimeCnt2000(0);
+//   UDS_bSetActivePLSCnt(TRUE);
+//   UDS_u840E2AbnormalExitReason = 0b01111001;
+
+//   // uint16 u16LocalthresholdAllWheelSpeed = UDS_u16ThresAllWheelSpeedC;
+
+//   UDS_u16SetTimeStampPLSRoutine((uint32)0);
+
+//   uint8 u8LocalIgnitionStatePowerModeValueForStart = (uint8)6;
+//   uint16 u16LocalthresholdAllWheelSpeed = (uint16) 5;  //Kph
+
+// /*[================= FOR TEST ====================]}*/
+//   // UDS_u8SetCurrentAllWheelSpeed((uint8)4);//stub
+//   // UDS_bSetAllWheelSpeedValid(TRUE); //just for the HIL test.
+//   // UDS_u8SetGKNPowerMode((uint8)10);//just for the HIL test.
+//   // UDS_u8SetReqPLS(UDS_DEFAULT_PLS_REQ);//stub
+// /*[=================  END FOR TEST ====================]}*/
+
+
+//   uint8 u8LocalStateRequested = (uint8) inParam0;
+//   uint8 u8LocalCurrentAllWheelSpeed = UDS_u8GetCurrentAllWheelSpeed();  
+//   boolean bLocalAllWheelSpeedsValid =  UDS_bGetAllWheelSpeedValid(); 
+//   boolean bLocalParklockFailurePresent = UDS_bGetParklockFailurePresent();
+//   UDS_u840E2ExitCondition = 0;
+
+//   // uint8 u8LocalIgnitionStatePowerMode = (uint8)UDS_u8GetGKNPowerMode(); 
+  
+//   UDS_Rt40E2_Started = 1;
+//   UDS_Rt40E2_Started_Ever = 1;
+
+//   if((inParam0 != 0x01)&& (inParam0 != 0x00))
+//   {
+//     *ErrorCode = DCM_E_REQUESTOUTOFRANGE;
+//     return E_NOT_OK;
+//   }
+//   else
+//   {
+
+//   if((UDS_bCurrentAllWheelSpeedUnderThreshold(u16LocalthresholdAllWheelSpeed) == TRUE) || (UDS_bRoutineConditionByPassC == 1)) /*=Stub to test  to be remove*/
+//   {
+//       if((bLocalParklockFailurePresent == FALSE && bLocalAllWheelSpeedsValid == TRUE) || (UDS_bRoutineConditionByPassC == 1))
+//       {
+//          if( (u8LocalIgnitionStatePowerModeValueForStart <= (uint8)UDS_u8GetGKNPowerMode() )|| (UDS_bRoutineConditionByPassC == 1))
+//          {
+//             if(u8LocalStateRequested == UDS_ENGAGE_PLS_REQ ) //engage the Parklock
+//             {
+//                 UDS_u8SetReqPLS(UDS_ENGAGE_PLS_REQ);
+//                 UDS_u8SetStatePLSRes(UDS_STATE_PLS_RES_SHIFTING_UNKNOWN); 
+//                // *outParam0 =  bLocalStateRequested; 
+//                // *outParam0 =  UDS_u8GetStatePLSRes(); 
+//                 *outParam0 =  0x79;
+//                 return E_OK;
+//             }
+//             if(u8LocalStateRequested == UDS_DISENGAGE_PLS_REQ )
+//             { //disengage the Parklock
+//                 UDS_u8SetReqPLS(UDS_DISENGAGE_PLS_REQ);
+//                 UDS_u8SetStatePLSRes(UDS_STATE_PLS_RES_SHIFTING_UNKNOWN); 
+//                // *outParam0 =  UDS_u8GetStatePLSRes(); 
+//                 *outParam0 =  0x79;
+//                 return  E_OK;
+//             }             
+//          }
+//          else
+//          {
+//            *ErrorCode = 0xF0;
+//            UDS_u840E2ExitCondition = 0xF0;
+//            UDS_bSetActivePLSCnt(FALSE);
+//            return E_NOT_OK; 
+//          }
+//       }
+//       else
+//       {
+//         *ErrorCode = 0x26;
+//         if(bLocalParklockFailurePresent == TRUE)
+//         {
+//           UDS_u840E2ExitCondition = 0x161;
+//         }
+//         if(bLocalAllWheelSpeedsValid == FALSE)
+//         {
+//           UDS_u840E2ExitCondition = 0x062;
+//         } 
+//         // result = E_NOT_OK;
+//         UDS_bSetActivePLSCnt(FALSE);
+//         return E_NOT_OK;
+//       }
+//    }
+//    else
+//    {
+//       *ErrorCode = 0x88;
+//       UDS_u840E2ExitCondition = 0x88;
+//       UDS_bSetActivePLSCnt(FALSE);
+//       return E_NOT_OK;
+//    }
+// }
+// }
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStopParklockRoutine                                  */
+/* !Description : RID 40E2                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStopParklockRoutine(Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    // Std_ReturnType result;
+
+    if(UDS_Rt40E2_Started == 1)
+    {
+        UDS_u8SetReqPLS(UDS_LEAVE_PLS_REQ);
+        UDS_bSetDdcModeReq(FALSE);
+        UDS_bSetDiagReq(FALSE);
+        UDS_u16SetPLSTimeCnt2000(5401);
+        UDS_bSetActivePLSCnt(FALSE);
+      //  UDS_u840E2AbnormalExitReason = (UDS_u840E2AbnormalExitReason & 0b11111110); /*removeda*/
+        UDS_u8RoutineInfo40E2 = (UDS_u8RoutineInfo40E2 & 0b11111110);
+        *outParam0 = UDS_u8RoutineInfo40E2; /*0x7A in CNTP*/
+        UDS_Rt40E2_Started = 0;
+        return E_OK;
+    } 
+    else 
+    {
+        /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_u8RcResultControlParkLockActuator                       */
+/* !Description : RID 40E2                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+Std_ReturnType UDS_u8RcRequestResultControlParkLockActuator(
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam1,
+    P2VAR(sint16, AUTOMATIC, DCM_VAR) outParam2,
+    P2VAR(sint16, AUTOMATIC, DCM_VAR) outParam3,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam4,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam5,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+  /*ROUTINE INFORMATION = EXIT CONDITION*/
+    if (UDS_Rt40E2_Started_Ever == 1)
+    {
+        TS_PARAM_UNUSED(OpStatus);
+
+        /*[================= FOR TEST ====================]}*/
+          // UDS_u8SetStatePLSRes((uint8)UDS_STATE_PLS_RES_FAULT);//stub
+        /*[=================  END FOR TEST ====================]}*/
+
+
+        if( UDS_u840E2ExitCondition == 0x161) // PLSFailurePresent
+        {
+            UDS_u840E2ExitCondition = (UDS_u840E2ExitCondition | 0b00000001);
+        }
+        if(UDS_u840E2ExitCondition == 0x88) // speed >= 5
+        {
+            UDS_u840E2ExitCondition = (UDS_u840E2ExitCondition | 0b00000010);
+        }
+        if(UDS_u840E2ExitCondition == 0x062) //speedValid
+        {
+            UDS_u840E2ExitCondition = (UDS_u840E2ExitCondition | 0b00000100);
+        }
+
+        if(UDS_u8GetIpmMgrDdcSts() == UDS_IPMMGRDDCSTS_ABORTED) 
+        {
+            UDS_u840E2ExitCondition = (UDS_u840E2ExitCondition | 0b10000000);
+        }
+
+        if( (VoltageLessThan(UDS_u8GetECUPowerSupplyVoltageRaw(),9) ) && (VoltaGegreaterThan(UDS_u8GetECUPowerSupplyVoltageRaw(),16) ) )
+        {
+            UDS_u840E2ExitCondition = (UDS_u840E2ExitCondition | 0b01000000);
+        }
+
+       // UDS_u840E2AbnormalExitReason = (UDS_u840E2AbnormalExitReason | 0b00000010);/*removeda*/
+
+        *outParam0 = UDS_u8RoutineInfo40E2;
+        *outParam1 = UDS_u8GetParkPawlStatus();
+        *outParam2 = UDS_s16GetMesPLSACtCurr(); //Calculated Park Lock actuator current
+        *outParam3 = UDS_s16GetPLActuatorMotorPos();//Measured Park Lock motor hall position 
+        *outParam4 = (uint8)UDS_u8GetDutycyclePLSPositionSensor(); //Park Pawl position sensor Duty cycle - Park Pawl Position Feedback Duty Cycle 
+        *outParam5 = (uint8)UDS_u840E2AbnormalExitReason;
+
+        return E_OK;
+    } 
+    else 
+    {
+            /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartControlParkLockActuator_Dev                     */
+/* !Description : RID DC01                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+// Std_ReturnType UDS_bRcStartControlParkLockActuator_Dev(uint8 inParam0, Dcm_OpStatusType OpStatus,
+//   P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+//   P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+
+Std_ReturnType UDS_bRcStartControlParkLockActuator_Dev(
+    uint8 inParam0,
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+   TS_PARAM_UNUSED(OpStatus);
+   // UDS_u8SetIpmMgrOperStReq(UDS_IPMMGROPERSTREQ_DDC);
+   uint8 u8LocalStateRequested = (uint8) inParam0;
+
+   UDS_u16SetPLSTimeCnt2000(0);
+   UDS_bSetActivePLSCnt(TRUE);
+   UDS_u8DC01AbnormalExitCondition = 0b01111001;
+
+   UDS_u16SetTimeStampPLSRoutine((uint32)0);
+
+   uint8 u16LocalthresholdVehiculeSpeed = (uint8) 3;  //Kph
+
+
+
+
+   UDS_RtDC01_Started = 1;
+   UDS_RtDC01_Started_Ever = 1;
+
+   if((u8LocalStateRequested != 0x01)&& (u8LocalStateRequested != 0x00))
+   {
+      *ErrorCode = DCM_E_REQUESTOUTOFRANGE;
+      return E_NOT_OK;
+   }
+   else
+   {
+      if(((VoltaGegreaterThan(UDS_u8GetECUPowerSupplyVoltageRaw(),11)) && (VoltageLessThan(UDS_u8GetECUPowerSupplyVoltageRaw(),16)))  || (UDS_bRoutineConditionByPassC == 1))
+      {
+         if(UDS_u8GetFailureClassParklockSytem() <= 2 || (UDS_bRoutineConditionByPassC == 1))
+         {      
+            if(u8LocalStateRequested == UDS_ENGAGE_PLS_REQ ) //engage the Parklock
+            {
+               UDS_u8SetReqPLS(UDS_ENGAGE_PLS_REQ);
+               UDS_bSetDdcModeReq(TRUE);
+               UDS_bSetDiagReq(TRUE);
+                  // UDS_u8SetStatePLSRes(UDS_STATE_PLS_RES_SHIFTING_UNKNOWN); //should we ?
+               *outParam0 =  0x7B;
+               return E_OK;
+            }
+            if(u8LocalStateRequested == UDS_DISENGAGE_PLS_REQ )
+            { //disengage the Parklock
+               UDS_u8SetReqPLS(UDS_DISENGAGE_PLS_REQ);
+               UDS_bSetDdcModeReq(TRUE);
+               UDS_bSetDiagReq(TRUE);
+                  // UDS_u8SetStatePLSRes(UDS_STATE_PLS_RES_SHIFTING_UNKNOWN); 
+               *outParam0 =  0x7B;
+               return  E_OK;
+            }
+         }
+         else
+         {
+            *ErrorCode = UDS_PLS_FAILURE_CLASS_NRC;
+            UDS_u8DC01ExitCondition = UDS_PLS_FAILURE_CLASS_NRC;
+            return E_NOT_OK;
+         }
+      }
+      else
+      {
+         *ErrorCode = UDS_UBAT_LV_OUTOFRANGE_NRC;
+         UDS_u8DC01ExitCondition = UDS_UBAT_LV_OUTOFRANGE_NRC;
+         UDS_bSetActivePLSCnt(FALSE);
+         return E_NOT_OK;
+      }   
+   }
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStopParklockRoutine_Dev                              */
+/* !Description : RID DC01                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStopParklockRoutine_Dev(Dcm_OpStatusType OpStatus,
+ P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+ P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    // Std_ReturnType result;
+
+    if(UDS_RtDC01_Started == 1)
+    {
+        UDS_u8SetReqPLS(UDS_LEAVE_PLS_REQ);
+        UDS_bSetDdcModeReq(FALSE);
+        UDS_bSetDiagReq(FALSE);
+        UDS_u16SetPLSTimeCnt2000(5401);
+        UDS_bSetActivePLSCnt(FALSE);
+        UDS_u8DC01AbnormalExitCondition = (UDS_u8DC01AbnormalExitCondition & 0b11111110);
+        *outParam0 = 0x7A; 
+        UDS_RtDC01_Started = 0;
+        UDS_bSetDiagReq(FALSE);
+        return E_OK;
+    } 
+    else 
+    {
+        /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_u8RcRequestResultControlParkLockActuator_Dev            */
+/* !Description : RID DC01                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+
+Std_ReturnType UDS_u8RcRequestResultControlParkLockActuator_Dev(
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam1,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+  TS_PARAM_UNUSED(OpStatus);
+  TS_PARAM_UNUSED(outParam0);
+
+  *outParam0 = 0x7A;
+  *outParam1 = UDS_u8GetParkLockActuatorStatus();
+  // UDS_u8DC01AbnormalExitCondition = (UDS_u8DC01AbnormalExitCondition | 0b00000010);
+   // *outParam1 = (uint8)UDS_u8DC01AbnormalExitCondition;
+   return E_OK;
+
+}
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : bODSTOrCalibrateCluctchesNotRunning                         */
+/* !Description : RID 40E4                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/* !Comment     : To be delete                                                */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+boolean bODSTOrCalibrateCluctchesNotRunning()
+{
+  //check that the both outine are not running
+  uint8 result = TRUE;
+  uint8 u8LocalODSTStatus = 0x00; // ToDo check the real value
+  uint8 u8LocalCalibrateClutchesStatus = 0x00; // ToDo check the real value
+
+  if((u8LocalODSTStatus == 0x00) && (u8LocalCalibrateClutchesStatus == 0x00 ))
+  {
+    result = TRUE;
+  }
+  else
+  {
+    result = FALSE;
+  }
+  return result;
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bGetDisconnectFailurePresent                            */
+/* !Description : RID 40E4                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/* !Comment     :                                                             */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+// boolean UDS_bGetDisconnectFailurePresent()
+// {
+//    boolean bLocal = FALSE; //ParklockFailurePresent UDS_bParklockFailurePresent
+   // checker toutes les fautes du parlock et rassurer qu'aucune de ces fautes n'est loggées
+   //ci -dessous la liste des DTC, à voir dans le fichier Diagnostics_SW_Content_3.16
+
+  // Dem_GetEventUdsStatus(18A6,bLocal); // API eb developpement chez Julien
+  // Dem_GetEventUdsStatus(2887,bLocal);
+  // Dem_GetEventUdsStatus(07E6,bLocal);
+  // Dem_GetEventUdsStatus(07E4,bLocal);
+  // Dem_GetEventUdsStatus(271B,bLocal);
+  // Dem_GetEventUdsStatus(288B,bLocal);
+  // Dem_GetEventUdsStatus(271A,bLocal);
+  // Dem_GetEventUdsStatus(288B,bLocal);
+  // Dem_GetEventUdsStatus(272C,bLocal);
+  // Dem_GetEventUdsStatus(C402,bLocal);
+  // Dem_GetEventUdsStatus(271D,bLocal);
+  // Dem_GetEventUdsStatus(271A,bLocal);
+
+   
+//    return bLocal;
+// }
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartDisconnectRoutine                               */
+/* !Description : RID 40E4                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+
+
+Std_ReturnType UDS_bRcStartDisconnectRoutine(
+    uint8 inParam0,
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+
+    UDS_u16SetTimeStampDISCRoutine((uint32)0);
+    // uint8 u8LocalImpMrgOperStSts_RunMode = 0x4;
+
+    uint8 u8LocalRequest = (uint8)inParam0;
+    uint16 u16LocalThresholdSupplyVoltage = (uint16)11;
+    TS_PARAM_UNUSED(u16LocalThresholdSupplyVoltage);
+
+
+    UDS_Rt40E4_Started = 1;
+    UDS_Rt40E4_Started_Ever = 1;
+
+    uint8 u16LocalthresholdVehiculeSpeed = (uint8) 3;  //Kph
+
+
+
+/*[================= FOR TEST ====================]}*/
+   // UDS_bSetDisconnectFailurePresent(FALSE);//stub
+   // UDS_u16SetUbatLV(12);//stub
+   // UDS_u8SetIpmMrgOperStSts(u8LocalImpMrgOperStSts_RunMode);//stub
+/*[=================  END FOR TEST ====================]}*/
+
+    if((u8LocalRequest != 0x01)&& (u8LocalRequest != 0x00))
+    {
+        *ErrorCode = DCM_E_REQUESTOUTOFRANGE;
+        return E_NOT_OK;
+    }
+    else
+    {
+        if((((UDS_Rt40E4_Started_Ever == 0) ^ (UDS_Rt40E2_Started_Ever == 0)) || (UDS_bGetRoutine40E2RunOver1sec() == TRUE))|| (UDS_bRoutineConditionByPassC == 1))
+        {
+            if((UDS_u8GetVehiculeSpeed() < u16LocalthresholdVehiculeSpeed) || (UDS_bRoutineConditionByPassC == 1))       
+            {
+                if(((VoltaGegreaterThan(UDS_u8GetECUPowerSupplyVoltageRaw(),11)) && (VoltageLessThan(UDS_u8GetECUPowerSupplyVoltageRaw(),16)))  || (UDS_bRoutineConditionByPassC == 1))
+                {
+                        if( (UDS_u8GetIPMOperationalState() == (uint8) UDS_IPMMGROPERSTSTS_DDC)  || (UDS_u8GetIPMOperationalState() == (uint8) UDS_IPMMGROPERSTSTS_RUN || (UDS_bRoutineConditionByPassC == 1 )))
+                        {
+                            if( (UDS_u8GetIPMOperationalState() != UDS_IPMMGROPERSTST_FAILURE ) || (UDS_bRoutineConditionByPassC == 1))
+                            {
+                                if(((UDS_u8GetMSGu8isVehicleSpeedQF() == 3) || (UDS_bRoutineConditionByPassC == 1)))
+                                {
+                                    if( ((UDS_u8GetControlStatusofElectricalMachine() != UDS_EMOPERATINGMODEEXT_TORQUE_MODE) || (UDS_bRoutineConditionByPassC == 1 ) ) )
+                                    {
+                                        if( ( (UDS_u8GetIpmMgrDdcSts() != UDS_IPMMGRDDCSTS_IN_EXECUTION) || (UDS_bRoutineConditionByPassC == 1) ) )
+                                        {
+                                            if ( (UDS_bGetRoutine40E3Running() == 0 )  || (UDS_bRoutineConditionByPassC == 1) )
+                                            {
+                                                UDS_u16Set40E4TimeCnt500(0);
+                                                UDS_Rt40E4_1Sec_Timer_EN=1;
+                                                UDS_bSetRoutine40E4RunOver1sec(FALSE);
+                                                UDS_u8RoutineInfo40E4 = (UDS_u8RoutineInfo40E4 | 0b00000011);
+                                                if(u8LocalRequest == UDS_CONNECT_DISC_REQ)
+                                                {
+                                                UDS_u8SetReqDISC(UDS_CONNECT_DISC_REQ);
+                                                UDS_bSetDdcModeReq(TRUE);
+                                                UDS_bSetDiagReq(TRUE);
+                                                UDS_u8SetStateDISCRes(UDS_STATE_DISC_RES_CONNECTING); //should we? waiting for specification.
+                                                *outParam0 = (uint8)UDS_u8RoutineInfo40E4; /*0x7B in CNTP*/
+                                                return E_OK;
+                                                }
+                                                if(u8LocalRequest == UDS_DISCONNECT_DISC_REQ)
+                                                {
+                                                UDS_u8SetReqDISC(UDS_DISCONNECT_DISC_REQ);
+                                                UDS_bSetDdcModeReq(TRUE);
+                                                UDS_bSetDiagReq(TRUE);
+                                                UDS_u8SetStateDISCRes(UDS_STATE_DISC_RES_CONNECTING);//should we? waiting for specification.
+                                                *outParam0 = (uint8)UDS_u8RoutineInfo40E4; /*0x7B in CNTP*/
+                                                return E_OK;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                *ErrorCode =UDS_Routine40E3Running_NRC ;
+                                                UDS_u840E4ExitCondition =UDS_Routine40E3Running_NRC ;
+                                                UDS_bSetActivePLSCnt(FALSE);
+                                                return E_NOT_OK;                            
+                                            }
+                                        }
+                                        else
+                                        {
+                                            *ErrorCode = UDS_NO_PREVIOUS_REQ_IN_EXEC_NRC;
+                                            UDS_u840E4ExitCondition = UDS_NO_PREVIOUS_REQ_IN_EXEC_NRC;
+                                            UDS_bSetActivePLSCnt(FALSE);
+                                            return E_NOT_OK;   
+                                        }                               
+                                    }
+                                    else
+                                    {
+                                        UDS_u840E4ExitCondition = UDS_EMACHINE_NOT_IN_TORQUE_MODE_NRC;
+                                        *ErrorCode = UDS_EMACHINE_NOT_IN_TORQUE_MODE_NRC;
+                                        UDS_bSetActivePLSCnt(FALSE);
+                                        return E_NOT_OK;   
+                                    }
+                                }
+                                else
+                                {
+                                   *ErrorCode = UDS_VEHICULESPEED_NOT_QF_NRC;
+                                    UDS_u840E4ExitCondition = UDS_VEHICULESPEED_NOT_QF_NRC;
+                                    UDS_bSetActivePLSCnt(FALSE); 
+                                    return E_NOT_OK;  
+                                }
+                            }
+                            else
+                            {
+                                *ErrorCode = UDS_OPERSTSTS_FAILURE_MODE_NRC;
+                                UDS_bSetActiveDISCCnt(FALSE);
+                                UDS_u840E4ExitCondition = UDS_OPERSTSTS_FAILURE_MODE_NRC;
+                                return E_NOT_OK;
+                            }
+                        }
+                        else
+                        {
+                            *ErrorCode = UDS_DCS_OPERSTSTS_NOT_DDC_RUN_MODE_NRC;
+                            UDS_bSetActiveDISCCnt(FALSE);
+                            UDS_u840E4ExitCondition = UDS_DCS_OPERSTSTS_NOT_DDC_RUN_MODE_NRC;
+                            return E_NOT_OK;
+                        }
+                }
+                else
+                {
+                    *ErrorCode = UDS_UBAT_LV_OUTOFRANGE_NRC;
+                    UDS_u840E4ExitCondition = UDS_UBAT_LV_OUTOFRANGE_NRC;
+                    UDS_bSetActiveDISCCnt(FALSE);
+                    return E_NOT_OK;
+                }
+            }
+            else
+            {
+                *ErrorCode = UDS_VEHICULESPEED_TO_HIGHT_NRC;
+                UDS_u840E4ExitCondition = UDS_VEHICULESPEED_TO_HIGHT_NRC;
+                UDS_bSetActiveDISCCnt(FALSE);
+                return E_NOT_OK;
+            }
+        }
+        else
+        {
+            *ErrorCode = UDS_Routine_40E4_run_lessthan1sec_NRC;
+            UDS_u840E4ExitCondition = UDS_Routine_40E4_run_lessthan1sec_NRC;
+            UDS_bSetActiveDISCCnt(FALSE);
+            return E_NOT_OK;
+        }
+    }
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStopDisconnectRoutine                                */
+/* !Description : RID 40E4                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStopDisconnectRoutine(Dcm_OpStatusType OpStatus,
+ P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0, 
+ P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+
+  TS_PARAM_UNUSED(OpStatus);
+  if (UDS_Rt40E4_Started == 1)
+  {
+    UDS_Rt40E4_Started = 0;
+    // UDS_u8SetReqDISC(UDS_DEFAULT_PLS_REQ);
+    UDS_u8SetReqDISC(UDS_LEAVE_DISC_REQ);
+    UDS_bSetDdcModeReq(FALSE);
+    UDS_bSetDiagReq(FALSE);
+    UDS_u16SetDISCTimeCnt2000(5401);
+    UDS_bSetActiveDISCCnt(FALSE);
+    UDS_u8RoutineInfo40E4 = (UDS_u8RoutineInfo40E4 & 0b11111110);
+    *outParam0 = (uint8)UDS_u8RoutineInfo40E4; /*0x7A in CNTP*/
+    
+    return E_OK;
+  } 
+  else 
+  {
+        /* Sequence Error; StartRoutine shall be called first */
+    *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+    return E_NOT_OK;
+  }
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_u8RcResultDisconnectRoutine                             */
+/* !Description : RID 40E4                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : N NGASSA                                                    */
+/******************************************************************************/
+/*Std_ReturnType UDS_u8RcRequestResultDisconnectRoutine(
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(uint32, AUTOMATIC, DCM_VAR) outParam1,
+    P2VAR(uint32, AUTOMATIC, DCM_VAR) outParam2,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)*/
+
+Std_ReturnType UDS_u8RcRequestResultDisconnectRoutine(
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam1,
+    P2VAR(sint16, AUTOMATIC, DCM_VAR) outParam2,
+    P2VAR(sint16, AUTOMATIC, DCM_VAR) outParam3,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam4,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam5,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    uint32 u32LocalOutput1;
+    uint32 u32LocalOutput2;
+
+    if (UDS_Rt40E4_Started_Ever == 1)
+    {
+        /*[================= FOR TEST ====================]}*/
+          // UDS_u8SetStatePLSRes((uint8)UDS_STATE_PLS_RES_FAULT);//stub
+        /*[=================  END FOR TEST ====================]}*/
+    
+        // if( UDS_u840E4ExitCondition == 0x26) // DISCFailurePresent
+        // {
+        //  UDS_u840E4ExitCondition = (UDS_u840E4ExitCondition | 0b00000001);
+        // }
+        // if(UDS_u840E4ExitCondition == 0x93) //Voltage greater than threshold
+        // {
+        //  UDS_u840E4ExitCondition = (UDS_u840E4ExitCondition | 0b00000010);
+        // }    
+        // if(UDS_u840E4ExitCondition == 0x21) // DISC in run mode
+        // {
+        //  UDS_u840E4ExitCondition = (UDS_u840E4ExitCondition | 0b00000100);
+        // }
+    
+
+        // *outParam0 = (uint8)UDS_u840E4AbnormalExitReason;
+/*
+        *outParam0 = (uint8)UDS_u8GetIpmMgrDdcstReq();
+
+        u32LocalOutput1 =  ( ( ( (uint32)UDS_u8GetCnctStsElecDrvUnit() ) << 24 ) & 0xFF000000 );
+        u32LocalOutput1 =  ( u32LocalOutput1  | ( ( ( (uint32)UDS_u8GetMesDISCActuatorCurrent() ) << 16 )  & 0x00FF0000 ) );
+        u32LocalOutput1 =  ( u32LocalOutput1  | ( ( ( (uint32)UDS_s16GetMesDISCMotorHallPos() ) << 0 )     & 0x0000FFFF ) );
+
+        u32LocalOutput2 = ( ( ( (uint32)UDS_u8GetDISCDutycycleDogClutchPositionSensor() ) << 24 ) & 0xFF000000 );
+        u32LocalOutput2 =  ( u32LocalOutput2  | ( ( ( (uint32)UDS_u840E4AbnormalExitReason ) << 16 )  & 0x00FF0000 ) );
+*/
+        *outParam0  = UDS_u8RoutineInfo40E4;
+        *outParam1  = (uint8)  UDS_u8GetCnctStsElecDrvUnit();
+        *outParam2  = (sint16) UDS_s16GetMesDISCActuatorCurrent();
+        *outParam3  = (sint16) UDS_s16GetConnectClutchActuatorPositionRaw();
+        *outParam4  = (uint8)  UDS_u8GetDutycycleDISCPositionSensor();
+        *outParam5  = (uint8)UDS_u840E4AbnormalExitReason;
+
+        return E_OK;
+
+    } 
+    else 
+    {
+            /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+}
+
+
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartWriteEPICAuthTargetID                           */
+/* !Description : RID 7011                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : NNGA                                                        */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStartWriteEPICAuthTargetID(
+    uint32 inParam0,
+    uint32 inParam1,
+    uint32 inParam2,
+    uint32 inParam3,
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    UDS_bSetActiveTargetIdCnt(TRUE);
+    UDS_bSetRoutineTargetIdActive(TRUE);
+    UDS_u16SetTargetIdCntTimeCnt2000(0);
+
+    uint8 u8LocalId;
+    if((UDS_bGetVKL15() == TRUE) || (UDS_bRoutineConditionByPassC == 1))
+    {
+
+          for (u8LocalId = 0; (u8LocalId < 16 ); u8LocalId++)
+          {
+              if(u8LocalId >=0 && u8LocalId <=3)
+              {
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam0 & 0xFF000000)>> 24);
+                u8LocalId++;
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam0 & 0x00FF0000)>> 16);
+                u8LocalId++;
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam0 & 0x0000FF00)>> 8);
+                u8LocalId++;
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam0 & 0x000000FF));
+              }
+              if(u8LocalId >=4 && u8LocalId <=7)
+              {
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam1 & 0xFF000000)>> 24);
+                u8LocalId++;
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam1 & 0x00FF0000)>> 16);
+                u8LocalId++;
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam1 & 0x0000FF00)>> 8);
+                u8LocalId++;
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam1 & 0x000000FF));
+              }              
+              if(u8LocalId >=8 && u8LocalId <=11)
+              {
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam2 & 0xFF000000)>> 24);
+                u8LocalId++;
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam2 & 0x00FF0000)>> 16);
+                u8LocalId++;
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam2 & 0x0000FF00)>> 8);
+                u8LocalId++;
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam2 & 0x000000FF));
+              }              
+              if(u8LocalId >=12 && u8LocalId <=15)
+              {
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam3 & 0xFF000000)>> 24);
+                u8LocalId++;
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam3 & 0x00FF0000)>> 16);
+                u8LocalId++;
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam3 & 0x0000FF00)>> 8);
+                u8LocalId++;
+                UDS_u8EPICTargetId[u8LocalId] = (uint8)((inParam3 & 0x000000FF));
+              }
+          }
+
+          *outParam0 = 0x4A;
+          //NvM_SetRamBlockStatus(NVM_BLOCK_UDS, TRUE);
+          UDS_REQUEST_SET_BLOCK_STATUS(NVM_BLOCK_UDS);
+          //NvM_WriteBlock(NVM_BLOCK_UDS, NULL_PTR);
+          UDS_REQUEST_WRITE_BLOCK(NVM_BLOCK_UDS);
+
+          UDS_vidSet_IMMOStartAuthorisationStatus((uint32)(UDS_u32Get_IMMOStartAuthorisationStatus() | 0x04000000));//set bit 2 byte 1
+            return E_OK;
+    } 
+    else
+    {
+        *ErrorCode = 0xF0;
+        return DCM_E_NOT_OK;
+    }
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStartAssemblyTest                                    */
+/* !Description : RID 0211                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : M ELZAHABY                                                  */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStartAssemblyTest(
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(uint16, AUTOMATIC, DCM_VAR) currentDataLength,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    UDS_u32_PPPSSC_SgnlInvld_ODSTDTCReport = 0x00000000;
+    UDS_u32_PLAPH_GenElecFail_ODSTDTCReport = 0x00000000;
+    UDS_u32_PLAPH_CirctOpen_ODSTDTCReport = 0x00000000;
+    UDS_u32_CMITS_GenElecFail_ODSTDTCReport = 0x00000000;
+    UDS_u32_DMPSC_GenElecFail_ODSTDTCReport = 0x00000000;
+    UDS_u32_DMPSC_NoSubTypInf_ODSTDTCReport = 0x00000000;
+    UDS_u32_DMCAPH_GenElecFail_ODSTDTCReport = 0x00000000;
+    UDS_u32_DMCAPH_CirctOpen_ODSTDTCReport = 0x00000000;
+    UDS_u32_DMCACM_NoOp_ODSTDTCReport = 0x00000000;
+    UDS_u32_DMCPSSC_SgnlInvld_ODSTDTCReport = 0x00000000;
+    UDS_u32_PPMCC_NoOp_ODSTDTCReport = 0x00000000;
+    if(( UDS_u8GetVehiculeSpeed() < 3 ) || (UDS_bRoutineConditionByPassC == 1) )
+    {
+        if( (UDS_u8GetMSGu8isVehicleSpeedQF() == 3) || (UDS_bRoutineConditionByPassC == 1))
+        {
+            if( (VoltaGegreaterThan(UDS_u8GetECUPowerSupplyVoltageRaw(),9) ) || (UDS_bRoutineConditionByPassC == 1))
+            {
+                if( ((UDS_bGetVKL15() == TRUE) && UDS_bGetVCranking() == FALSE)  || (UDS_bRoutineConditionByPassC == 1))
+                {
+                    UDS_Rt211_Started = 1;
+                    UDS_Rt211_Started_Ever = 1;
+                    UDS_bSetAssembTestReq (TRUE);
+                    UDS_bSetODSTRunning(TRUE);
+                    UDS_bSetRoutine0211Running(TRUE);
+                    UDS_u16Set0211TimeCnt500(0);
+                    UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 | 0b000000001);
+                    UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 & 0b11111101);
+                    if((BLDC_bPlsOutOfDutyCycleRange  == TRUE)||(BLDC_bPlsDutyCycleMin  == TRUE)||(BLDC_bPlsDutyCycleMax  == TRUE)) 
+                    {
+                       UDS_u32_PPPSSC_SgnlInvld_ODSTDTCReport = 0x00305429;
+                    }
+                    else
+                    {
+                      UDS_u32_PPPSSC_SgnlInvld_ODSTDTCReport = 0x00000000;
+                    }
+
+                    if((BLDC_u8BldcErr(BLDC_PLS,BLDC_FLAG_NB_FF1) == TRUE) && (BLDC_u8BldcErr(BLDC_PLS,BLDC_FLAG_NB_FF2) == FALSE)) 
+                    {
+                       UDS_u32_PLAPH_GenElecFail_ODSTDTCReport = 0x00305601;
+                    }
+                    else
+                    {
+                      UDS_u32_PLAPH_GenElecFail_ODSTDTCReport = 0x00000000;
+                    }
+
+                    if((BLDC_u8BldcErr(BLDC_PLS,BLDC_FLAG_NB_FF1) == FALSE) && (BLDC_u8BldcErr(BLDC_PLS,BLDC_FLAG_NB_FF2) == TRUE)) 
+                    {
+                       UDS_u32_PLAPH_CirctOpen_ODSTDTCReport = 0x00305613;
+                    }
+                    else
+                    {
+                      UDS_u32_PLAPH_CirctOpen_ODSTDTCReport = 0x00000000;
+                    }
+
+                    if( ((FAM_GetEventStatus(Dem_FSMADBT_DBOARDTEMPGND) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMACBT_CBOARDTEMPHVGND) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMAPMT_PMTEMPGND) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMACBT_CBOARDTEMPLVGND) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMADBT_DBOARDTEMPVCC) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMACBT_CBOARDTEMPHVVCC) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMAPMT_PMTEMPVCC) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMACBT_CBOARDTEMPLVVCC) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMAICT_COOLINGTEMPGND) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMAICT_COOLINGTEMPVCC) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMAMST_STATORTEMP1GND) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMAMST_STATORTEMP2GND) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMAMST_STATORTEMP1VCC) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FSMAMST_STATORTEMP2VCC) & 0b00000001) == 1U) ) 
+                    {
+                       UDS_u32_CMITS_GenElecFail_ODSTDTCReport = 0x00066601;
+                    }
+                    else
+                    {
+                      UDS_u32_CMITS_GenElecFail_ODSTDTCReport = 0x00000000;
+                    }
+
+                    if( ((FAM_GetEventStatus(Dem_FTEARES_COSGND) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FTEARES_COSVCC) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FTEARES_SINGND) & 0b00000001) == 1U) ||
+                        ((FAM_GetEventStatus(Dem_FTEARES_SINVCC) & 0b00000001) == 1U) )
+                    {
+                       UDS_u32_DMPSC_GenElecFail_ODSTDTCReport = 0x000A3F01;
+                    }
+                    else
+                    {
+                      UDS_u32_DMPSC_GenElecFail_ODSTDTCReport = 0x00000000;
+                    }
+
+                    if(((FAM_GetEventStatus(Dem_FTEAEXC_URESEXCAVGERR) & 0b00000001) == 1U))
+                    {
+                       UDS_u32_DMPSC_NoSubTypInf_ODSTDTCReport = 0x000A4000;
+                    }
+                    else
+                    {
+                      UDS_u32_DMPSC_NoSubTypInf_ODSTDTCReport = 0x00000000;
+                    }
+
+                    if((BLDC_u8BldcErr(BLDC_DS,BLDC_FLAG_NB_FF1) == TRUE) && (BLDC_u8BldcErr(BLDC_DS,BLDC_FLAG_NB_FF2) == FALSE)) 
+                    {
+                       UDS_u32_DMCAPH_GenElecFail_ODSTDTCReport = 0x001B0301;
+                    }
+                    else
+                    {
+                      UDS_u32_DMCAPH_GenElecFail_ODSTDTCReport = 0x00000000;
+                    }
+
+                    if((BLDC_u8BldcErr(BLDC_DS,BLDC_FLAG_NB_FF1) == FALSE) && (BLDC_u8BldcErr(BLDC_DS,BLDC_FLAG_NB_FF2) == TRUE)) 
+                    {
+                       UDS_u32_DMCAPH_CirctOpen_ODSTDTCReport = 0x001B0313;
+                    }
+                    else
+                    {
+                      UDS_u32_DMCAPH_CirctOpen_ODSTDTCReport = 0x00000000;
+                    }
+
+                    if((BLDC_u8BldcErr(BLDC_DS,BLDC_FLAG_NB_FF1) == FALSE) && (BLDC_u8BldcErr(BLDC_DS,BLDC_FLAG_NB_FF2) == FALSE)) 
+                    {
+                       UDS_u32_DMCACM_NoOp_ODSTDTCReport = 0x001B0593;
+                    }
+                    else
+                    {
+                      UDS_u32_DMCACM_NoOp_ODSTDTCReport = 0x00000000;
+                    }
+
+                    if((BLDC_bDsOutOfDutyCycleRange == TRUE)||(BLDC_bDsDutyCycleMin == TRUE)||(BLDC_bDsDutyCycleMax == TRUE)) 
+                    {
+                       UDS_u32_DMCPSSC_SgnlInvld_ODSTDTCReport = 0x001B0629;
+                    }
+                    else
+                    {
+                      UDS_u32_DMCPSSC_SgnlInvld_ODSTDTCReport = 0x00000000;
+                    }
+
+                    if((BLDC_u8BldcErr(BLDC_PLS,BLDC_FLAG_NB_FF1) == FALSE) && (BLDC_u8BldcErr(BLDC_PLS,BLDC_FLAG_NB_FF2) == FALSE)) 
+                    {
+                       UDS_u32_PPMCC_NoOp_ODSTDTCReport = 0x00272C93;
+                    }
+                    else
+                    {
+                      UDS_u32_PPMCC_NoOp_ODSTDTCReport = 0x00000000;
+                    }
+
+                    *outParam0 = UDS_u8RoutineInfo0211;
+                    return E_OK;  
+                }
+                else
+                {
+                    *ErrorCode = 0xF0;
+                    return E_NOT_OK;
+                }  
+            }
+            else
+            {
+                *ErrorCode = 0x93;
+                return E_NOT_OK;
+            }
+        }
+        else
+        {
+            *ErrorCode = 0x26;
+            return E_NOT_OK;
+        }
+    }
+    else
+    {
+        *ErrorCode = 0x88;
+        return E_NOT_OK;
+    }
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_bRcStopAssemblyTest                                     */
+/* !Description : RID 0211                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : M ELZAHABY                                                  */
+/******************************************************************************/
+Std_ReturnType UDS_bRcStopAssemblyTest(
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8, AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(uint16, AUTOMATIC, DCM_VAR) currentDataLength,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    if (UDS_Rt211_Started == 1)
+    {
+        UDS_bSetRoutine0211Running(FALSE);
+        UDS_bSetAssembTestReq(FALSE);
+        UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 & 0b111111110);
+        *outParam0 = UDS_u8RoutineInfo0211;
+        UDS_Rt211_Started = 0;
+        return E_OK;
+    }
+    else
+    {
+        /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    } 
+}
+
+/******************************************************************************/
+/*                                                                            */
+/* !FuncName    : UDS_u8RcRequestResultAssemblyTest                           */
+/* !Description : RID 0211                                                    */
+/* !Number      : 0                                                           */
+/* !Reference   : NONE                                                        */
+/*                                                                            */
+/******************************************************************************/
+/* !LastAuthor  : M ELZAHABY                                                  */
+/******************************************************************************/
+Std_ReturnType UDS_u8RcRequestResultAssemblyTest(
+    Dcm_OpStatusType OpStatus,
+    P2VAR(uint8 , AUTOMATIC, DCM_VAR) outParam0,
+    P2VAR(uint16, AUTOMATIC, DCM_VAR) currentDataLength,
+    P2VAR(Dcm_NegativeResponseCodeType, AUTOMATIC, DCM_VAR) ErrorCode)
+{
+    TS_PARAM_UNUSED(OpStatus);
+    if (UDS_Rt211_Started_Ever == 1)
+    {
+        uint8* RoutineInfoOutPutByte=outParam0; 
+        outParam0++;
+        (*currentDataLength)=(*currentDataLength)+1;
+        if(UDS_u32_PPPSSC_SgnlInvld_ODSTDTCReport != 0x00000000)
+        {
+            UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 | 0b000000010);
+            *outParam0=((uint8)((UDS_u32_PPPSSC_SgnlInvld_ODSTDTCReport & 0x00FF0000)>> 16));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_PPPSSC_SgnlInvld_ODSTDTCReport & 0x0000FF00)>> 8));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_PPPSSC_SgnlInvld_ODSTDTCReport & 0x000000FF)));
+            outParam0++;
+            (*currentDataLength)=(*currentDataLength)+3;
+        }
+        else
+        {
+            
+        }
+        if(UDS_u32_PLAPH_GenElecFail_ODSTDTCReport != 0x00000000)
+        {
+            UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 | 0b000000010);
+            *outParam0=((uint8)((UDS_u32_PLAPH_GenElecFail_ODSTDTCReport & 0x00FF0000)>> 16));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_PLAPH_GenElecFail_ODSTDTCReport & 0x0000FF00)>> 8));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_PLAPH_GenElecFail_ODSTDTCReport & 0x000000FF)));
+            outParam0++;
+            (*currentDataLength)=(*currentDataLength)+3;
+        }
+        else
+        {
+
+        }
+        if(UDS_u32_PLAPH_CirctOpen_ODSTDTCReport != 0x00000000)
+        {
+            UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 | 0b000000010);
+            *outParam0=((uint8)((UDS_u32_PLAPH_CirctOpen_ODSTDTCReport & 0x00FF0000)>> 16));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_PLAPH_CirctOpen_ODSTDTCReport & 0x0000FF00)>> 8));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_PLAPH_CirctOpen_ODSTDTCReport & 0x000000FF)));
+            outParam0++;
+            (*currentDataLength)=(*currentDataLength)+3;
+        }
+        else
+        {
+
+        }
+        if(UDS_u32_CMITS_GenElecFail_ODSTDTCReport != 0x00000000)
+        {
+            UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 | 0b000000010);
+            *outParam0=((uint8)((UDS_u32_CMITS_GenElecFail_ODSTDTCReport & 0x00FF0000)>> 16));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_CMITS_GenElecFail_ODSTDTCReport & 0x0000FF00)>> 8));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_CMITS_GenElecFail_ODSTDTCReport & 0x000000FF)));
+            outParam0++;
+            (*currentDataLength)=(*currentDataLength)+3;
+        }
+        else
+        {
+
+        }
+        if(UDS_u32_DMPSC_GenElecFail_ODSTDTCReport != 0x00000000)
+        {
+        UDS_u8RoutineInfo0211 = 0x7A;
+        *outParam0=((uint8)((UDS_u32_DMPSC_GenElecFail_ODSTDTCReport & 0x00FF0000)>> 16));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_DMPSC_GenElecFail_ODSTDTCReport & 0x0000FF00)>> 8));
+        outParam0++;
+        *outParam0=((uint8)((UDS_u32_DMPSC_GenElecFail_ODSTDTCReport & 0x000000FF)));
+        outParam0++;
+        (*currentDataLength)=(*currentDataLength)+3;
+        }
+        else
+        {
+
+        }
+        if(UDS_u32_DMPSC_NoSubTypInf_ODSTDTCReport != 0x00000000)
+        {
+            UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 | 0b000000010);
+            *outParam0=((uint8)((UDS_u32_DMPSC_NoSubTypInf_ODSTDTCReport & 0x00FF0000)>> 16));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_DMPSC_NoSubTypInf_ODSTDTCReport & 0x0000FF00)>> 8));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_DMPSC_NoSubTypInf_ODSTDTCReport & 0x000000FF)));
+            outParam0++;
+            (*currentDataLength)=(*currentDataLength)+3;
+        }
+        else
+        {
+
+        }
+        if(UDS_u32_DMCAPH_GenElecFail_ODSTDTCReport != 0x00000000)
+        {
+            UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 | 0b000000010);
+            *outParam0=((uint8)((UDS_u32_DMCAPH_GenElecFail_ODSTDTCReport & 0x00FF0000)>> 16));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_DMCAPH_GenElecFail_ODSTDTCReport & 0x0000FF00)>> 8));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_DMCAPH_GenElecFail_ODSTDTCReport & 0x000000FF)));
+            outParam0++;
+            (*currentDataLength)=(*currentDataLength)+3;
+        }
+        else
+        {
+
+        }
+        if(UDS_u32_DMCAPH_CirctOpen_ODSTDTCReport != 0x00000000)
+        {
+            UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 | 0b000000010);
+            *outParam0=((uint8)((UDS_u32_DMCAPH_CirctOpen_ODSTDTCReport & 0x00FF0000)>> 16));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_DMCAPH_CirctOpen_ODSTDTCReport & 0x0000FF00)>> 8));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_DMCAPH_CirctOpen_ODSTDTCReport & 0x000000FF)));
+            outParam0++;
+            (*currentDataLength)=(*currentDataLength)+3;
+        }
+        else
+        {
+        }
+        if(UDS_u32_DMCACM_NoOp_ODSTDTCReport != 0x00000000)
+        {
+            UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 | 0b000000010);
+            *outParam0=((uint8)((UDS_u32_DMCACM_NoOp_ODSTDTCReport & 0x00FF0000)>> 16));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_DMCACM_NoOp_ODSTDTCReport & 0x0000FF00)>> 8));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_DMCACM_NoOp_ODSTDTCReport & 0x000000FF)));
+            outParam0++;
+            (*currentDataLength)=(*currentDataLength)+3;
+        }
+        else
+        {
+        }
+        if(UDS_u32_DMCPSSC_SgnlInvld_ODSTDTCReport != 0x00000000)
+        {
+            UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 | 0b000000010);
+            *outParam0=((uint8)((UDS_u32_DMCPSSC_SgnlInvld_ODSTDTCReport & 0x00FF0000)>> 16));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_DMCPSSC_SgnlInvld_ODSTDTCReport & 0x0000FF00)>> 8));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_DMCPSSC_SgnlInvld_ODSTDTCReport & 0x000000FF)));
+            outParam0++;
+            (*currentDataLength)=(*currentDataLength)+3;
+        }
+        else
+        {
+        }
+        if(UDS_u32_PPMCC_NoOp_ODSTDTCReport != 0x00000000)
+        {
+            UDS_u8RoutineInfo0211 = (UDS_u8RoutineInfo0211 | 0b000000010);
+            *outParam0=((uint8)((UDS_u32_PPMCC_NoOp_ODSTDTCReport & 0x00FF0000)>> 16));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_PPMCC_NoOp_ODSTDTCReport & 0x0000FF00)>> 8));
+            outParam0++;
+            *outParam0=((uint8)((UDS_u32_PPMCC_NoOp_ODSTDTCReport & 0x000000FF)));
+            outParam0++;
+            (*currentDataLength)=(*currentDataLength)+3;
+        }
+        else
+        {
+        } 
+
+      *RoutineInfoOutPutByte=UDS_u8RoutineInfo0211;
+        return E_OK;
+    }
+    else 
+    {
+        /* Sequence Error; StartRoutine shall be called first */
+        *ErrorCode = DCM_E_REQUESTSEQUENCEERROR;
+        return E_NOT_OK;
+    }
+}
+
+#define UDS_STOP_SEC_CODE
+#include "UDS_MemMap.h"
+
+/*-------------------------------- end of file -------------------------------*/
